@@ -49,39 +49,13 @@ export default function ManagerDashboard() {
 
   useEffect(() => { load() }, [])
 
-  async function generateFromFeedback(i) {
-    const feedback = tickets[i].feedback
-    if (!feedback.trim()) return
-    setTickets(ts => ts.map((t, idx) => idx === i ? { ...t, generating: true } : t))
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 200,
-          messages: [{
-            role: 'user',
-            content: `Based on this support ticket feedback, generate two things:
-1. A short "issue" summary (max 8 words, describes what the ticket was about)
-2. A "highlight" (one sentence key takeaway for the agent)
-
-Feedback: "${feedback}"
-
-Respond ONLY with valid JSON, no markdown, no explanation:
-{"issue": "...", "highlight": "..."}`
-          }]
-        })
-      })
-      const data = await res.json()
-      const text = data.content?.[0]?.text || ''
-      const parsed = JSON.parse(text)
-      setTickets(ts => ts.map((t, idx) => idx === i
-        ? { ...t, issue: parsed.issue, highlight: parsed.highlight, generating: false }
-        : t))
-    } catch(e) {
-      setTickets(ts => ts.map((t, idx) => idx === i ? { ...t, generating: false } : t))
-    }
+  function generateFromFeedback(i) {
+    const feedback = tickets[i].feedback.trim()
+    if (!feedback) return
+    const sentences = feedback.match(/[^.!?]+[.!?]+/g) || [feedback]
+    const issue = sentences[0].trim()
+    const highlight = sentences.length > 1 ? sentences[sentences.length - 1].trim() : sentences[0].trim()
+    setTickets(ts => ts.map((t, idx) => idx === i ? { ...t, issue, highlight } : t))
   }
 
   function updateTicket(i, field, value) {
