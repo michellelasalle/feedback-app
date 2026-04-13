@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import TicketCard from '../components/TicketCard'
 
 const EMPTY_TICKET = {
-  id: '', date: '', issue: '', feedback: '', highlight: '', ticketUrl: '', tags: ['positive']
+  id: '', date: '', issue: '', feedback: '', highlight: '', ticketUrl: '', tags: ['positive'], generating: false
 }
 
 export default function ManagerDashboard() {
@@ -110,11 +110,16 @@ Respond ONLY with valid JSON, no markdown, no explanation:
     setSaveMsg('')
     try {
       if (!form.agentSlug || !form.weekLabel || !form.weekStart) throw new Error('Please fill in all report fields.')
-      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) throw new Error('Please fill in all required ticket fields (ID, Issue, Feedback, Highlight).')
+      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) throw new Error('Please fill in all required ticket fields (ID, Feedback, Issue, Highlight).')
 
       const ticketsJson = JSON.stringify(tickets.map(t => ({
-        ...t,
+        id: t.id,
         date: t.date || form.weekStart,
+        issue: t.issue,
+        feedback: t.feedback,
+        highlight: t.highlight,
+        ticketUrl: t.ticketUrl,
+        tags: t.tags,
       })))
 
       await supabase.from('weekly_reports').insert({
@@ -170,12 +175,10 @@ Respond ONLY with valid JSON, no markdown, no explanation:
           </div>
         )}
 
-        {/* NEW REPORT FORM */}
         {showCreate && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
             <h2 className="font-semibold text-slate-800 mb-4">Create New Report</h2>
 
-            {/* Report details */}
             <div className="grid grid-cols-3 gap-4 mb-6 pb-6 border-b border-slate-100">
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1">Agent</label>
@@ -205,7 +208,6 @@ Respond ONLY with valid JSON, no markdown, no explanation:
               </div>
             </div>
 
-            {/* Tickets */}
             <h3 className="font-medium text-slate-700 mb-3">Tickets</h3>
             <div className="space-y-4">
               {tickets.map((ticket, i) => (
@@ -216,6 +218,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
                       <button onClick={() => removeTicket(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
                     )}
                   </div>
+
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
                       <label className="text-xs text-slate-400 block mb-1">Ticket ID <span className="text-red-400">*</span></label>
@@ -234,31 +237,55 @@ Respond ONLY with valid JSON, no markdown, no explanation:
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
                     </div>
                   </div>
+
+                  {/* FEEDBACK FIRST with auto-generate button */}
                   <div className="mb-3">
-                    <label className="text-xs text-slate-400 block mb-1">Issue <span className="text-red-400">*</span></label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-slate-400">Feedback <span className="text-red-400">*</span></label>
+                      {ticket.feedback.trim() && (
+                        <button
+                          onClick={() => generateFromFeedback(i)}
+                          disabled={ticket.generating}
+                          className="text-xs px-2.5 py-1 rounded-lg font-medium text-white disabled:opacity-50 flex items-center gap-1"
+                          style={{ background: '#f59e0b' }}>
+                          {ticket.generating ? '⏳ Generating…' : '✨ Auto-generate Issue & Highlight'}
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={ticket.feedback}
+                      onChange={e => updateTicket(i, 'feedback', e.target.value)}
+                      placeholder="Paste the coaching feedback here, then click ✨ Auto-generate"
+                      rows={3}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                  </div>
+
+                  {/* ISSUE — auto-filled or manual */}
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-400 block mb-1">
+                      Issue <span className="text-red-400">*</span>
+                      <span className="text-slate-300 font-normal ml-1">(auto-generated or type manually)</span>
+                    </label>
                     <input
                       value={ticket.issue}
                       onChange={e => updateTicket(i, 'issue', e.target.value)}
                       placeholder="Short description of the ticket"
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
                   </div>
+
+                  {/* HIGHLIGHT — auto-filled or manual */}
                   <div className="mb-3">
-                    <label className="text-xs text-slate-400 block mb-1">Feedback <span className="text-red-400">*</span></label>
-                    <textarea
-                      value={ticket.feedback}
-                      onChange={e => updateTicket(i, 'feedback', e.target.value)}
-                      placeholder="Full coaching feedback for the agent"
-                      rows={3}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="text-xs text-slate-400 block mb-1">Key Highlight <span className="text-red-400">*</span></label>
+                    <label className="text-xs text-slate-400 block mb-1">
+                      Key Highlight <span className="text-red-400">*</span>
+                      <span className="text-slate-300 font-normal ml-1">(auto-generated or type manually)</span>
+                    </label>
                     <input
                       value={ticket.highlight}
                       onChange={e => updateTicket(i, 'highlight', e.target.value)}
                       placeholder="One sentence key takeaway"
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
                   </div>
+
                   <div className="mb-3">
                     <label className="text-xs text-slate-400 block mb-1">Ticket URL (optional)</label>
                     <input
@@ -267,6 +294,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
                       placeholder="https://app.intercom.com/..."
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
                   </div>
+
                   <div>
                     <label className="text-xs text-slate-400 block mb-2">Tags</label>
                     <div className="flex gap-2">
