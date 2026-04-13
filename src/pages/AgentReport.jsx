@@ -24,6 +24,7 @@ export default function AgentReport() {
         .from('weekly_reports')
         .select('*')
         .eq('agent_slug', slug)
+        .eq('published', true)
         .order('week_start', { ascending: false })
       setReports(r || [])
 
