@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import TicketCard from '../components/TicketCard'
 
+const EMPTY_TICKET = {
+  id: '', date: '', issue: '', feedback: '', highlight: '', ticketUrl: '', tags: ['positive']
+}
+
 export default function ManagerDashboard() {
   const [agents, setAgents] = useState([])
   const [reports, setReports] = useState({})
@@ -9,7 +13,8 @@ export default function ManagerDashboard() {
   const [ackMaps, setAckMaps] = useState({})
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ agentSlug: '', weekLabel: '', weekStart: '', ticketsRaw: '' })
+  const [form, setForm] = useState({ agentSlug: '', weekLabel: '', weekStart: '' })
+  const [tickets, setTickets] = useState([{ ...EMPTY_TICKET }])
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
 
@@ -44,20 +49,49 @@ export default function ManagerDashboard() {
 
   useEffect(() => { load() }, [])
 
+  function updateTicket(i, field, value) {
+    setTickets(ts => ts.map((t, idx) => idx === i ? { ...t, [field]: value } : t))
+  }
+
+  function updateTicketTag(i, tag) {
+    setTickets(ts => ts.map((t, idx) => {
+      if (idx !== i) return t
+      const has = t.tags.includes(tag)
+      const next = has ? t.tags.filter(x => x !== tag) : [...t.tags, tag]
+      return { ...t, tags: next.length === 0 ? [tag] : next }
+    }))
+  }
+
+  function addTicket() {
+    setTickets(ts => [...ts, { ...EMPTY_TICKET }])
+  }
+
+  function removeTicket(i) {
+    setTickets(ts => ts.filter((_, idx) => idx !== i))
+  }
+
   async function createReport() {
     setSaving(true)
     setSaveMsg('')
     try {
-      JSON.parse(form.ticketsRaw)
+      if (!form.agentSlug || !form.weekLabel || !form.weekStart) throw new Error('Please fill in all report fields.')
+      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) throw new Error('Please fill in all required ticket fields (ID, Issue, Feedback, Highlight).')
+
+      const ticketsJson = JSON.stringify(tickets.map(t => ({
+        ...t,
+        date: t.date || form.weekStart,
+      })))
+
       await supabase.from('weekly_reports').insert({
         agent_slug: form.agentSlug,
         week_label: form.weekLabel,
         week_start: form.weekStart,
-        tickets_json: form.ticketsRaw,
+        tickets_json: ticketsJson,
       })
       setSaveMsg('Report created successfully!')
       setShowCreate(false)
-      setForm({ agentSlug: '', weekLabel: '', weekStart: '', ticketsRaw: '' })
+      setForm({ agentSlug: '', weekLabel: '', weekStart: '' })
+      setTickets([{ ...EMPTY_TICKET }])
       load()
     } catch(e) {
       setSaveMsg('Error: ' + e.message)
@@ -86,7 +120,7 @@ export default function ManagerDashboard() {
             <p className="text-white/50 text-sm mt-0.5">Manager Dashboard</p>
           </div>
           <button
-            onClick={() => setShowCreate(s => !s)}
+            onClick={() => { setShowCreate(s => !s); setSaveMsg('') }}
             className="px-4 py-2 rounded-lg text-sm font-medium text-white border border-white/20 hover:bg-white/10">
             {showCreate ? 'Cancel' : '+ New Report'}
           </button>
@@ -101,12 +135,15 @@ export default function ManagerDashboard() {
           </div>
         )}
 
+        {/* NEW REPORT FORM */}
         {showCreate && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
             <h2 className="font-semibold text-slate-800 mb-4">Create New Report</h2>
-            <div className="grid grid-cols-2 gap-4 mb-4">
+
+            {/* Report details */}
+            <div className="grid grid-cols-3 gap-4 mb-6 pb-6 border-b border-slate-100">
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Agent</label>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Agent</label>
                 <select
                   value={form.agentSlug}
                   onChange={e => setForm(f => ({ ...f, agentSlug: e.target.value }))}
@@ -116,14 +153,15 @@ export default function ManagerDashboard() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Week Label (e.g. April 13, 2026)</label>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Week Label</label>
                 <input
                   value={form.weekLabel}
                   onChange={e => setForm(f => ({ ...f, weekLabel: e.target.value }))}
+                  placeholder="e.g. April 13, 2026"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Week Start Date</label>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Week Start Date</label>
                 <input
                   type="date"
                   value={form.weekStart}
@@ -131,23 +169,110 @@ export default function ManagerDashboard() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
               </div>
             </div>
-            <div className="mb-4">
-              <label className="text-xs text-slate-500 block mb-1">Tickets JSON</label>
-              <p className="text-xs text-slate-400 mb-2">Paste a JSON array of ticket objects. Each ticket needs: id, date, issue, feedback, tags, highlight, ticketUrl.</p>
-              <textarea
-                value={form.ticketsRaw}
-                onChange={e => setForm(f => ({ ...f, ticketsRaw: e.target.value }))}
-                rows={10}
-                placeholder='[{"id":"TKT-001","date":"04/13/2026","issue":"...","feedback":"...","tags":["positive"],"highlight":"...","ticketUrl":""}]'
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-400" />
+
+            {/* Tickets */}
+            <h3 className="font-medium text-slate-700 mb-3">Tickets</h3>
+            <div className="space-y-4">
+              {tickets.map((ticket, i) => (
+                <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-slate-600">Ticket {i + 1}</span>
+                    {tickets.length > 1 && (
+                      <button onClick={() => removeTicket(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1">Ticket ID <span className="text-red-400">*</span></label>
+                      <input
+                        value={ticket.id}
+                        onChange={e => updateTicket(i, 'id', e.target.value)}
+                        placeholder="e.g. TKT-001"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1">Date</label>
+                      <input
+                        type="date"
+                        value={ticket.date}
+                        onChange={e => updateTicket(i, 'date', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-400 block mb-1">Issue <span className="text-red-400">*</span></label>
+                    <input
+                      value={ticket.issue}
+                      onChange={e => updateTicket(i, 'issue', e.target.value)}
+                      placeholder="Short description of the ticket"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-400 block mb-1">Feedback <span className="text-red-400">*</span></label>
+                    <textarea
+                      value={ticket.feedback}
+                      onChange={e => updateTicket(i, 'feedback', e.target.value)}
+                      placeholder="Full coaching feedback for the agent"
+                      rows={3}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-400 block mb-1">Key Highlight <span className="text-red-400">*</span></label>
+                    <input
+                      value={ticket.highlight}
+                      onChange={e => updateTicket(i, 'highlight', e.target.value)}
+                      placeholder="One sentence key takeaway"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-400 block mb-1">Ticket URL (optional)</label>
+                    <input
+                      value={ticket.ticketUrl}
+                      onChange={e => updateTicket(i, 'ticketUrl', e.target.value)}
+                      placeholder="https://app.intercom.com/..."
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-2">Tags</label>
+                    <div className="flex gap-2">
+                      {['positive', 'improve', 'incorrect'].map(tag => {
+                        const colors = {
+                          positive: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+                          improve: 'bg-amber-100 text-amber-700 border-amber-300',
+                          incorrect: 'bg-red-100 text-red-700 border-red-300',
+                        }
+                        const labels = { positive: '✓ Well Done', improve: '↑ Room to Grow', incorrect: '✗ Needs Correction' }
+                        const selected = ticket.tags.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => updateTicketTag(i, tag)}
+                            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${selected ? colors[tag] : 'bg-white text-slate-400 border-slate-200'}`}>
+                            {labels[tag]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+
             <button
-              onClick={createReport}
-              disabled={saving}
-              className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
-              style={{ background: '#1a3a6e' }}>
-              {saving ? 'Saving…' : 'Save Report'}
+              onClick={addTicket}
+              className="mt-3 text-sm text-blue-500 hover:text-blue-700 font-medium">
+              + Add another ticket
             </button>
+
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <button
+                onClick={createReport}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: '#1a3a6e' }}>
+                {saving ? 'Saving…' : 'Save Report'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -157,39 +282,49 @@ export default function ManagerDashboard() {
             const wi = weekIdxs[agent.slug] ?? 0
             const agentReports = reports[agent.slug] || []
             const report = agentReports[wi]
-            const tickets = report ? JSON.parse(report.tickets_json) : []
-            const ackedCount = tickets.filter(t => ackMaps[agent.slug]?.[t.id]).length
-            const topTag = tickets.some(t => t.tags?.includes('incorrect')) ? 'incorrect'
-              : tickets.some(t => t.tags?.includes('improve')) ? 'improve' : 'positive'
+            const ticks = report ? JSON.parse(report.tickets_json) : []
+            const ackedCount = ticks.filter(t => ackMaps[agent.slug]?.[t.id]).length
+            const topTag = ticks.some(t => t.tags?.includes('incorrect')) ? 'incorrect'
+              : ticks.some(t => t.tags?.includes('improve')) ? 'improve' : 'positive'
             const tagColors = { positive: 'text-emerald-600', improve: 'text-amber-600', incorrect: 'text-red-600' }
             const tagLabels = { positive: 'Well Done', improve: 'Room to Grow', incorrect: 'Needs Correction' }
 
             return (
               <div key={agent.slug} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                    style={{ background: 'linear-gradient(135deg,#1a3a6e,#2563eb)' }}>
-                    {agent.display_name[0]}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm"
+                      style={{ background: 'linear-gradient(135deg,#1a3a6e,#2563eb)' }}>
+                      {agent.display_name[0]}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-800">{agent.display_name}</div>
+                      <div className={`text-xs font-medium ${tagColors[topTag]}`}>{tagLabels[topTag]}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-semibold text-slate-800">{agent.display_name}</div>
-                    <div className={`text-xs font-medium ${tagColors[topTag]}`}>{tagLabels[topTag]}</div>
-                  </div>
+                  <a
+                    href={`/agent/${agent.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-white hover:opacity-90"
+                    style={{ background: '#1a3a6e' }}>
+                    View →
+                  </a>
                 </div>
                 <div className="flex gap-4 text-sm">
                   <div className="text-center">
-                    <div className="font-bold text-slate-800">{tickets.length}</div>
+                    <div className="font-bold text-slate-800">{ticks.length}</div>
                     <div className="text-slate-400 text-xs">Tickets</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold text-emerald-600">{ackedCount}/{tickets.length}</div>
+                    <div className="font-bold text-emerald-600">{ackedCount}/{ticks.length}</div>
                     <div className="text-slate-400 text-xs">Acked</div>
                   </div>
                 </div>
-                {tickets.length > 0 && (
+                {ticks.length > 0 && (
                   <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5">
                     <div className="h-1.5 rounded-full bg-emerald-500 transition-all"
-                      style={{ width: `${(ackedCount / tickets.length) * 100}%` }} />
+                      style={{ width: `${(ackedCount / ticks.length) * 100}%` }} />
                   </div>
                 )}
               </div>
@@ -202,10 +337,10 @@ export default function ManagerDashboard() {
           const wi = weekIdxs[agent.slug] ?? 0
           const agentReports = reports[agent.slug] || []
           const report = agentReports[wi]
-          const tickets = report
+          const ticks = report
             ? JSON.parse(report.tickets_json).map(t => ({ ...t, acknowledged: !!(ackMaps[agent.slug]?.[t.id]) }))
             : []
-          const ackedCount = tickets.filter(t => t.acknowledged).length
+          const ackedCount = ticks.filter(t => t.acknowledged).length
 
           return (
             <div key={agent.slug} className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
@@ -218,11 +353,16 @@ export default function ManagerDashboard() {
                   </div>
                   <div>
                     <span className="font-semibold text-slate-800">{agent.display_name}</span>
-                    <div className="text-xs text-slate-400">/agent/{agent.slug}</div>
+                    <div className="text-xs text-slate-400">
+                      <a href={`/agent/${agent.slug}`} target="_blank" rel="noreferrer"
+                        className="hover:text-blue-500 hover:underline">
+                        /agent/{agent.slug} ↗
+                      </a>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  {report && <span className="text-sm text-emerald-600 font-medium">{ackedCount}/{tickets.length} acknowledged</span>}
+                  {report && <span className="text-sm text-emerald-600 font-medium">{ackedCount}/{ticks.length} acknowledged</span>}
                   {agentReports.length > 1 && (
                     <select
                       value={wi}
@@ -234,8 +374,8 @@ export default function ManagerDashboard() {
                 </div>
               </div>
               <div className="p-6 space-y-5">
-                {tickets.length === 0 && <p className="text-slate-400 text-sm">No report for this week.</p>}
-                {tickets.map(ticket => (
+                {ticks.length === 0 && <p className="text-slate-400 text-sm">No report for this week.</p>}
+                {ticks.map(ticket => (
                   <TicketCard
                     key={ticket.id}
                     ticket={ticket}
