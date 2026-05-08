@@ -12,7 +12,7 @@ export default function ManagerDashboard() {
   const [weekIdxs, setWeekIdxs] = useState({})
   const [ackMaps, setAckMaps] = useState({})
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState(null) // null | 'new' | 'addTo'
+  const [mode, setMode] = useState(null)
   const [form, setForm] = useState({ agentSlug: '', weekLabel: '', weekStart: '' })
   const [tickets, setTickets] = useState([{ ...EMPTY_TICKET }])
   const [addToReportId, setAddToReportId] = useState('')
@@ -51,7 +51,6 @@ export default function ManagerDashboard() {
 
   useEffect(() => { load() }, [])
 
-  // All draft reports across all agents for the "Add to" dropdown
   const allDrafts = Object.values(reports).flat().filter(r => !r.published)
 
   function generateFromFeedback(i, isAddTo = false) {
@@ -100,15 +99,13 @@ export default function ManagerDashboard() {
     setSaving(true)
     setSaveMsg('')
     try {
-      if (!form.agentSlug || !form.weekLabel || !form.weekStart) 
-      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) 
       const ticketsJson = JSON.stringify(tickets.map(t => ({
         id: t.id, date: t.date || form.weekStart, issue: t.issue,
         feedback: t.feedback, highlight: t.highlight, ticketUrl: t.ticketUrl, tags: t.tags,
       })))
       await supabase.from('weekly_reports').insert({
         agent_slug: form.agentSlug, week_label: form.weekLabel,
-        week_start: form.weekStart, tickets_json: ticketsJson, published: false,
+        week_start: form.weekStart || new Date().toISOString(), tickets_json: ticketsJson, published: false,
       })
       setSaveMsg('Draft report created! Add more tickets or publish when ready.')
       setMode(null)
@@ -124,7 +121,6 @@ export default function ManagerDashboard() {
     setSaveMsg('')
     try {
       if (!addToReportId) throw new Error('Please select a report to add to.')
-      if (addToTickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) throw new Error('Please fill in all required ticket fields.')
       const report = allDrafts.find(r => r.id === +addToReportId)
       if (!report) throw new Error('Report not found.')
       const existing = JSON.parse(report.tickets_json)
@@ -169,7 +165,7 @@ export default function ManagerDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Ticket ID </label>
+                <label className="text-xs text-slate-400 block mb-1">Ticket ID</label>
                 <input value={ticket.id} onChange={e => updateTicket(i, 'id', e.target.value, isAddTo)}
                   placeholder="e.g. TKT-001"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
@@ -182,7 +178,7 @@ export default function ManagerDashboard() {
             </div>
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-slate-400">Feedback </label>
+                <label className="text-xs text-slate-400">Feedback</label>
                 {ticket.feedback.trim() && (
                   <button onClick={() => generateFromFeedback(i, isAddTo)}
                     className="text-xs px-2.5 py-1 rounded-lg font-medium text-white"
@@ -285,7 +281,6 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* NEW REPORT FORM */}
         {mode === 'new' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
             <h2 className="font-semibold text-slate-800 mb-1">Create New Draft Report</h2>
@@ -323,7 +318,6 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* ADD TO EXISTING DRAFT FORM */}
         {mode === 'addTo' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
             <h2 className="font-semibold text-slate-800 mb-1">Add Tickets to Existing Draft</h2>
@@ -352,7 +346,6 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* Summary cards */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {agents.map(agent => {
             const wi = weekIdxs[agent.slug] ?? 0
@@ -404,7 +397,6 @@ export default function ManagerDashboard() {
           })}
         </div>
 
-        {/* Per-agent report sections */}
         {agents.map(agent => {
           const wi = weekIdxs[agent.slug] ?? 0
           const agentReports = reports[agent.slug] || []
@@ -434,11 +426,9 @@ export default function ManagerDashboard() {
                 </div>
                 <div className="flex items-center gap-3">
                   {report && (
-                    report.published ? (
-                      <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">✓ Published</span>
-                    ) : (
-                      <span className="text-xs text-amber-600 font-medium flex items-center gap-1">● Draft</span>
-                    )
+                    report.published
+                      ? <span className="text-xs text-emerald-600 font-medium">✓ Published</span>
+                      : <span className="text-xs text-amber-600 font-medium">● Draft</span>
                   )}
                   {report && !report.published && (
                     <button onClick={() => publishReport(report.id)}
