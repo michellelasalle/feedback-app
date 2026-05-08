@@ -100,8 +100,8 @@ export default function ManagerDashboard() {
     setSaving(true)
     setSaveMsg('')
     try {
-      if (!form.agentSlug || !form.weekLabel || !form.weekStart) throw new Error('Please fill in all report fields.')
-      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) throw new Error('Please fill in all required ticket fields.')
+      if (!form.agentSlug || !form.weekLabel || !form.weekStart) 
+      if (tickets.some(t => !t.id || !t.issue || !t.feedback || !t.highlight)) 
       const ticketsJson = JSON.stringify(tickets.map(t => ({
         id: t.id, date: t.date || form.weekStart, issue: t.issue,
         feedback: t.feedback, highlight: t.highlight, ticketUrl: t.ticketUrl, tags: t.tags,
@@ -169,7 +169,7 @@ export default function ManagerDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Ticket ID <span className="text-red-400">*</span></label>
+                <label className="text-xs text-slate-400 block mb-1">Ticket ID </label>
                 <input value={ticket.id} onChange={e => updateTicket(i, 'id', e.target.value, isAddTo)}
                   placeholder="e.g. TKT-001"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
@@ -182,7 +182,7 @@ export default function ManagerDashboard() {
             </div>
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-slate-400">Feedback <span className="text-red-400">*</span></label>
+                <label className="text-xs text-slate-400">Feedback </label>
                 {ticket.feedback.trim() && (
                   <button onClick={() => generateFromFeedback(i, isAddTo)}
                     className="text-xs px-2.5 py-1 rounded-lg font-medium text-white"
@@ -196,13 +196,13 @@ export default function ManagerDashboard() {
                 rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
             </div>
             <div className="mb-3">
-              <label className="text-xs text-slate-400 block mb-1">Issue <span className="text-red-400">*</span> <span className="text-slate-300 font-normal">(auto-filled or type manually)</span></label>
+              <label className="text-xs text-slate-400 block mb-1">Issue <span className="text-slate-300 font-normal">(auto-filled or type manually)</span></label>
               <input value={ticket.issue} onChange={e => updateTicket(i, 'issue', e.target.value, isAddTo)}
                 placeholder="Short description of the ticket"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
             </div>
             <div className="mb-3">
-              <label className="text-xs text-slate-400 block mb-1">Key Highlight <span className="text-red-400">*</span> <span className="text-slate-300 font-normal">(auto-filled or type manually)</span></label>
+              <label className="text-xs text-slate-400 block mb-1">Key Highlight <span className="text-slate-300 font-normal">(auto-filled or type manually)</span></label>
               <input value={ticket.highlight} onChange={e => updateTicket(i, 'highlight', e.target.value, isAddTo)}
                 placeholder="One sentence key takeaway"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" />
