@@ -104,15 +104,20 @@ export default function ManagerDashboard() {
         feedback: t.feedback, highlight: t.highlight, ticketUrl: t.ticketUrl, tags: t.tags,
       })))
       await supabase.from('weekly_reports').insert({
-        agent_slug: form.agentSlug, week_label: form.weekLabel,
-        week_start: form.weekStart || new Date().toISOString(), tickets_json: ticketsJson, published: false,
+        agent_slug: form.agentSlug,
+        week_label: form.weekLabel,
+        week_start: form.weekStart || new Date().toISOString(),
+        tickets_json: ticketsJson,
+        published: false,
       })
       setSaveMsg('Draft report created! Add more tickets or publish when ready.')
       setMode(null)
       setForm({ agentSlug: '', weekLabel: '', weekStart: '' })
       setTickets([{ ...EMPTY_TICKET }])
       load()
-    } catch(e) { setSaveMsg('Error: ' + e.message) }
+    } catch(e) {
+      setSaveMsg('Error: ' + e.message)
+    }
     setSaving(false)
   }
 
@@ -136,7 +141,9 @@ export default function ManagerDashboard() {
       setAddToReportId('')
       setAddToTickets([{ ...EMPTY_TICKET }])
       load()
-    } catch(e) { setSaveMsg('Error: ' + e.message) }
+    } catch(e) {
+      setSaveMsg('Error: ' + e.message)
+    }
     setSaving(false)
   }
 
